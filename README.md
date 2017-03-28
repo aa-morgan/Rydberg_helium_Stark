@@ -47,7 +47,7 @@ tqdm provides a simple and efficient progress bar.
 pip install tqdm
 ```
 
-To install this project as a python package that can be imported into python 
+To install this project as a package that can be imported into python 
 as helium_stark,
 
 ```
