@@ -1,9 +1,7 @@
 # Rydberg_helium_Stark
-Calculate the Stark effect in Rydberg helium using the Numerov method.
-
-## About
 Tools for calculating the Stark effect in Rydberg helium using the Numerov method.
 
+## About
 The code is based on:
 
     Stark structure of the Rydberg states of alkali-metal atoms
