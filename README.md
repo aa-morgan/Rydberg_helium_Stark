@@ -48,7 +48,7 @@ pip install tqdm
 ```
 
 To install this project as a package that can be imported into python 
-as helium_stark,
+as starkhelium,
 
 ```
 git clone https://github.com/ad3ller/Rydberg_helium_Stark
