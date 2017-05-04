@@ -146,6 +146,7 @@ def wf_numerov(n, l, nmax, step=0.005, rmin=1.0):
 
         nmax ensures that wavefunctions from different values of n can be aligned.
     """
+    l = float(l)             # horrible hack. Otherwise jit fails if l = int(>81).
     W1 = -0.5 * n**-2.0
     W2 = (l + 0.5)**2.0
     rmax = 2 * nmax * (nmax + 15)
