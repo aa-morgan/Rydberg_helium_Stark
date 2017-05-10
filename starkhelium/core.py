@@ -32,6 +32,9 @@ from numba import jit
 from tqdm import trange
 from scipy.constants import h, hbar, c, alpha, m_e, e, epsilon_0, atomic_mass, pi
 from .drake1999 import quantum_defects
+import errno
+import os
+from datetime import datetime
 
 # constants
 En_h = alpha**2.0 * m_e * c**2.0
@@ -356,8 +359,26 @@ def eig_sort(w, v):
     ids = np.argsort(w)
     return w[ids], v[:, ids]
 
+def saveEig(field):
+    
+    fileout = os.path.join("..", "data", "E_0-00_0-50_11_B_1-5776.csv")
+    np.savetxt(fileout, map1, delimiter=",")
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        
+        
+def saveEig(data, field):
+    mydir = os.path.join("..", "data", datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+    try:
+        os.makedirs(mydir)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise  # This was not a "directory exist" error..
+    fileout = os.path.join(mydir, "F_" + str(field) + ".csv")
+    np.savetxt(fileout, data, delimiter=",")
+
 @jit
-def stark_map(H_0, mat_S, field, H_Z=0):
+def stark_map(H_0, mat_S, field, H_Z=0, saveEach=False):
     """ Calculate the eigenvalues for H_0 + H_S, where
 
          - H_0 is the field-free Hamiltonian,
@@ -379,6 +400,8 @@ def stark_map(H_0, mat_S, field, H_Z=0):
         H_S = F * mat_S / mu_me
         # diagonalise, assuming matrix is Hermitian.
         eig_val[i] = np.linalg.eigh(H_0 + H_Z + H_S)[0]
+        if saveEach:
+            saveEig(data=eig_val[i], field=(field[i] / (100 * e * a_0 / En_h)))
     return eig_val
 
 @jit
