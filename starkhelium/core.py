@@ -55,6 +55,23 @@ def get_nl_vals(nmin, nmax, m):
     return n_vals, l_vals
 
 @jit
+def get_nlm_vals(nmin, nmax):
+    """ n, l and m vals for each matrix column, using range n_min to n_max.
+    """
+    n_rng = np.arange(nmin, nmax + 1)
+    n_vals = np.array([], dtype='int32')
+    l_vals = np.array([], dtype='int32')
+    m_vals = np.array([], dtype='int32')
+    for n in n_rng:
+        l_rng = np.arange(0, n)
+        for l in l_rng:
+            m_rng = np.arange(-l, l+1)
+            n_vals = np.append(n_vals, np.array(np.zeros_like(m_rng) + n))
+            l_vals = np.append(l_vals, np.array(np.zeros_like(m_rng) + l))
+            m_vals = np.append(m_vals, m_rng)
+    return n_vals, l_vals, m_vals
+
+@jit
 def get_J_vals(S, L_vals, diff):
     """ J = L + diff; unless L == 0, in which case J = S.
     """
@@ -138,6 +155,14 @@ def W_n(S, n_vals, L_vals, J_vals):
                      mu_M**2.0 * ((1.0 + (5.0 / 6.0) * (alpha * Z)**2.0)/ n**2.0))
         energy = np.append(energy, en)
     return energy * mu_me
+
+@jit
+def E_zeeman(m_vals, B_z):
+    """ Energy shift due to the interaction of the orbital angular momentum of the Rydberg electron with the magnetic field.
+
+        -- atomic units --
+    """
+    return m_vals * B_z * (1/2)
 
 @jit
 def wf_numerov(n, l, nmax, step=0.005, rmin=1.0):
@@ -272,31 +297,42 @@ def rad_overlap(n1, l1, n2, l2, p=1.0):
     r1, y1 = wf_numerov(n1, l1, nmax)
     r2, y2 = wf_numerov(n2, l2, nmax)
     return abs(wf_overlap(r1, y1, r2, y2, p))
-
-@jit
-def ang_overlap(l1, l2, m):
+    
+def ang_overlap(l_1, l_2, m_1, m_2):
     """ Angular overlap <l1, m| cos(theta) |l2, m>.
     """
-    dl = l2 - l1
-    if dl == -1:
-        return ((l1**2 - m**2) / ((2*l1 + 1) * (2*l1 - 1)))**0.5
-    elif dl == +1:
-        return (((l1 + 1)**2 - m**2) / ((2*l1 + 3) * (2*l1 + 1)))**0.5
-    else:
-        return 0.0
+    dl = l_2 - l_1
+    dm = m_2 - m_1
+    l, m = l_1, m_1
+    if dm == 0:
+        if dl == +1:
+            return +(((l+1)**2-m**2)/((2*l+3)*(2*l+1)))**0.5
+        elif dl == -1:
+            return +((l**2-m**2)/((2*l+1)*(2*l-1)))**0.5
+    elif dm == +1:
+        if dl == +1:
+            return -(((l+m+2)*(l+m+1))/(2*(2*l+3)*(2*l+1)))**0.5
+        elif dl == -1:
+            return +(((l-m)*(l-m-1))/(2*(2*l+1)*(2*l-1)))**0.5
+    elif dm == -1:
+        if dl == +1:
+            return +(((l-m+2)*(l-m+1))/(2*(2*l+3)*(2*l+1)))**0.5
+        elif dl == -1:
+            return -(((l+m)*(l+m-1))/(2*(2*l+1)*(2*l-1)))**0.5
+    return 0.0
 
 @jit
-def stark_int(n_1, l_1, n_2, l_2, m):
+def stark_int(n_1, l_1, n_2, l_2, m_1, m_2):
     """ Stark interaction between states |n1, l1, m> and |n2, l2, m>.
     """
     if abs(l_1 - l_2) == 1:
         # Stark interaction
-        return ang_overlap(l_1, l_2, m) * rad_overlap(n_1, l_1, n_2, l_2)
+        return ang_overlap(l_1, l_2, m_1, m_2) * rad_overlap(n_1, l_1, n_2, l_2)
     else:
         return 0.0
 
 @jit
-def stark_matrix(neff_vals, l_vals, m):
+def stark_matrix(neff_vals, l_vals, m_vals):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
@@ -304,10 +340,12 @@ def stark_matrix(neff_vals, l_vals, m):
     for i in trange(num_cols, desc="calculate Stark terms"):
         n_1 = neff_vals[i]
         l_1 = l_vals[i]
+        m_1 = m_vals[i]
         for j in range(i + 1, num_cols):
             n_2 = neff_vals[j]
             l_2 = l_vals[j]
-            mat_I[i][j] = stark_int(n_1, l_1, n_2, l_2, m)
+            m_2 = m_vals[j]
+            mat_I[i][j] = stark_int(n_1, l_1, n_2, l_2, m_1, m_2)
             # assume matrix is symmetric
             mat_I[j][i] = mat_I[i][j]
     return mat_I
@@ -319,7 +357,7 @@ def eig_sort(w, v):
     return w[ids], v[:, ids]
 
 @jit
-def stark_map(H_0, mat_S, field):
+def stark_map(H_0, mat_S, field, H_Z=0):
     """ Calculate the eigenvalues for H_0 + H_S, where
 
          - H_0 is the field-free Hamiltonian,
@@ -327,6 +365,7 @@ def stark_map(H_0, mat_S, field):
          - D is the electric dipole moment,
          - F is each value of the electric field (a.u.),
          - mat_S is the Stark interaction matrix.
+         - H_Z is the Zeeman Hamiltonian
 
         return eig_val [array.shape(num_fields, num_states)]
     """
@@ -339,11 +378,11 @@ def stark_map(H_0, mat_S, field):
         F = field[i]
         H_S = F * mat_S / mu_me
         # diagonalise, assuming matrix is Hermitian.
-        eig_val[i] = np.linalg.eigh(H_0 + H_S)[0]
+        eig_val[i] = np.linalg.eigh(H_0 + H_Z + H_S)[0]
     return eig_val
 
 @jit
-def stark_map_vec(H_0, mat_S, field):
+def stark_map_vec(H_0, mat_S, field, H_Z=0):
     """ Calculate eigenvalues and eigenvectors for H_0 + H_S. See stark_map().
 
         return eig_val [array.shape(num_fields, num_states)],
@@ -364,5 +403,5 @@ def stark_map_vec(H_0, mat_S, field):
         F = field[i]
         H_S = F * mat_S / mu_me
         # diagonalise, assuming matrix is Hermitian.
-        eig_val[i], eig_vec[i] = np.linalg.eigh(H_0 + H_S)
+        eig_val[i], eig_vec[i] = np.linalg.eigh(H_0 + H_Z + H_S)
     return eig_val, eig_vec
