@@ -36,9 +36,6 @@ import errno
 import os
 from datetime import datetime
 
-# user variables
-JIT_CACHE = False
-
 # constants
 En_h = alpha**2.0 * m_e * c**2.0
 a_0 = hbar/ (m_e * c * alpha)
@@ -47,7 +44,7 @@ Z = 2
 mu_me = (mass_He - m_e) / mass_He
 mu_M = m_e / mass_He
 
-@jit(cache=JIT_CACHE)
+@jit
 def get_nl_vals(nmin, nmax, m):
     """ n and l vals for each matrix column, using range n_min to n_max.
     """
@@ -60,7 +57,7 @@ def get_nl_vals(nmin, nmax, m):
         l_vals = np.append(l_vals, l_rng)
     return n_vals, l_vals
 
-@jit(cache=JIT_CACHE)
+@jit
 def get_nlm_vals(nmin, nmax):
     """ n, l and m vals for each matrix column, using range n_min to n_max.
     """
@@ -77,7 +74,7 @@ def get_nlm_vals(nmin, nmax):
             m_vals = np.append(m_vals, m_rng)
     return n_vals, l_vals, m_vals
 
-@jit(cache=JIT_CACHE)
+@jit
 def get_J_vals(S, L_vals, diff):
     """ J = L + diff; unless L == 0, in which case J = S.
     """
@@ -85,7 +82,7 @@ def get_J_vals(S, L_vals, diff):
     J_vals[L_vals == 0] = S
     return J_vals
 
-@jit(cache=JIT_CACHE)
+@jit
 def get_triplet_nLJ(nmin, nmax, m):
     """ n and L and J vals for each matrix column, using range n_min to n_max.
     """
@@ -106,7 +103,7 @@ def get_triplet_nLJ(nmin, nmax, m):
                 J_vals = np.append(J_vals, np.arange(l - 1, l + 2, dtype='int32'))
     return n_vals, L_vals, J_vals
 
-@jit(cache=JIT_CACHE)
+@jit
 def get_qd(S, n_vals, L_vals, J_vals):
     """ Calculate quantum defects.
     """
@@ -136,7 +133,7 @@ def get_qd(S, n_vals, L_vals, J_vals):
             qd[i] = 0.0
     return qd
 
-@jit(cache=JIT_CACHE)
+@jit
 def En_0(neff):
     """ Field-free energy. Ignores extra correction terms.
 
@@ -148,7 +145,7 @@ def En_0(neff):
         energy = np.append(energy, en)
     return energy * mu_me
 
-@jit(cache=JIT_CACHE)
+@jit
 def W_n(S, n_vals, L_vals, J_vals):
     """ Field-free energy. Includes extra correction terms.
 
@@ -162,7 +159,7 @@ def W_n(S, n_vals, L_vals, J_vals):
         energy = np.append(energy, en)
     return energy * mu_me
 
-@jit(cache=JIT_CACHE)
+@jit
 def E_zeeman(m_vals, B_z):
     """ Energy shift due to the interaction of the orbital angular momentum of the Rydberg electron with the magnetic field.
 
@@ -170,7 +167,7 @@ def E_zeeman(m_vals, B_z):
     """
     return m_vals * B_z * (1/2)
 
-@jit(cache=JIT_CACHE)
+@jit
 def wf_numerov(n, l, nmax, step=0.005, rmin=1.0):
     """ Use the Numerov method to find the wavefunction for state n*, l, where
         n* = n - delta.
@@ -236,7 +233,7 @@ def wf_numerov(n, l, nmax, step=0.005, rmin=1.0):
     yvals = yvals * (np.sum((yvals**2.0) * (rvals**2.0)))**-0.5
     return rvals, yvals
 
-@jit(cache=JIT_CACHE)
+@jit
 def find_first(arr, val):
     """ Index of the first occurence of val in arr.
     """
@@ -247,7 +244,7 @@ def find_first(arr, val):
         i += 1
     raise Exception('val not found in arr')
 
-@jit(cache=JIT_CACHE)
+@jit
 def find_last(arr, val):
     """ Index of the last occurence of val in arr.
     """
@@ -258,7 +255,7 @@ def find_last(arr, val):
         i -= 1
     raise Exception('val not found in arr')
 
-@jit(cache=JIT_CACHE)
+@jit
 def wf_align(r1, y1, r2, y2):
     """ Align two lists pairs (r, y) on r, assuming r array values overlap
         except at head and tail, and that arrays are reverse sorted.
@@ -288,14 +285,14 @@ def wf_align(r1, y1, r2, y2):
     else:
         raise Exception("Failed to align wavefunctions.")
 
-@jit(cache=JIT_CACHE)
+@jit
 def wf_overlap(r1, y1, r2, y2, p=1.0):
     """ Find the overlap between two radial wavefunctions (r, y).
     """
     r1, y1, r2, y2 = wf_align(r1, y1, r2, y2)
     return np.sum(y1 * y2 * r1**(2.0 + p))
 
-@jit(cache=JIT_CACHE)
+@jit(cache=True)
 def rad_overlap(n1, l1, n2, l2, p=1.0):
     """ Radial overlap for state n1, l1 and n2 l2.
     """
@@ -304,30 +301,32 @@ def rad_overlap(n1, l1, n2, l2, p=1.0):
     r2, y2 = wf_numerov(n2, l2, nmax)
     return abs(wf_overlap(r1, y1, r2, y2, p))
     
-def ang_overlap(l_1, l_2, m_1, m_2):
+def ang_overlap(l_1, l_2, m_1, m_2, field='crossed'):
     """ Angular overlap <l1, m| cos(theta) |l2, m>.
     """
     dl = l_2 - l_1
     dm = m_2 - m_1
     l, m = l_1, m_1
-    if dm == 0:
-        if dl == +1:
-            return +(((l+1)**2-m**2)/((2*l+3)*(2*l+1)))**0.5
-        elif dl == -1:
-            return +((l**2-m**2)/((2*l+1)*(2*l-1)))**0.5
-    elif dm == +1:
-        if dl == +1:
-            return -(((l+m+2)*(l+m+1))/(2*(2*l+3)*(2*l+1)))**0.5
-        elif dl == -1:
-            return +(((l-m)*(l-m-1))/(2*(2*l+1)*(2*l-1)))**0.5
-    elif dm == -1:
-        if dl == +1:
-            return +(((l-m+2)*(l-m+1))/(2*(2*l+3)*(2*l+1)))**0.5
-        elif dl == -1:
-            return -(((l+m)*(l+m-1))/(2*(2*l+1)*(2*l-1)))**0.5
+    if field=='parallel':
+        if dm == 0:
+            if dl == +1:
+                return +(((l+1)**2-m**2)/((2*l+3)*(2*l+1)))**0.5
+            elif dl == -1:
+                return +((l**2-m**2)/((2*l+1)*(2*l-1)))**0.5
+    elif field=='crossed':
+        if dm == +1:
+            if dl == +1:
+                return -(0.5*(-1)**(m-2*l)) *  (((l+m+1)*(l+m+2))/((2*l+1)*(2*l+3)))**0.5 
+            elif dl == -1:
+                return +(0.5*(-1)**(-m+2*l)) * (((l-m-1)*(l-m))  /((2*l-1)*(2*l+1)))**0.5
+        elif dm == -1:
+            if dl == +1:
+                return +(0.5*(-1)**(m-2*l)) *  (((l-m+1)*(l-m+2))/((2*l+1)*(2*l+3)))**0.5
+            elif dl == -1:
+                return -(0.5*(-1)**(-m+2*l)) * (((l+m-1)*(l+m))  /((2*l-1)*(2*l+1)))**0.5
     return 0.0
 
-@jit(cache=JIT_CACHE)
+@jit
 def stark_int(n_1, l_1, n_2, l_2, m_1, m_2):
     """ Stark interaction between states |n1, l1, m> and |n2, l2, m>.
     """
@@ -337,13 +336,13 @@ def stark_int(n_1, l_1, n_2, l_2, m_1, m_2):
     else:
         return 0.0
 
-@jit(cache=JIT_CACHE)
+@jit
 def stark_matrix(neff_vals, l_vals, m_vals):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
     mat_I = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="calculate Stark terms", miniters=10):
+    for i in trange(num_cols, desc="calculate Stark terms", miniters=100):
         n_1 = neff_vals[i]
         l_1 = l_vals[i]
         m_1 = m_vals[i]
@@ -362,25 +361,7 @@ def eig_sort(w, v):
     ids = np.argsort(w)
     return w[ids], v[:, ids]
 
-def saveEig(field):
-    
-    fileout = os.path.join("..", "data", "E_0-00_0-50_11_B_1-5776.csv")
-    np.savetxt(fileout, map1, delimiter=",")
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-        
-        
-def saveEig(data, field):
-    mydir = os.path.join("..", "data", datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
-    try:
-        os.makedirs(mydir)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise  # This was not a "directory exist" error..
-    fileout = os.path.join(mydir, "F_" + str(field) + ".csv")
-    np.savetxt(fileout, data, delimiter=",")
-
-@jit(cache=JIT_CACHE)
+@jit
 def stark_map(H_0, mat_S, field, H_Z=0, saveEach=False):
     """ Calculate the eigenvalues for H_0 + H_S, where
 
@@ -407,7 +388,7 @@ def stark_map(H_0, mat_S, field, H_Z=0, saveEach=False):
             saveEig(data=eig_val[i], field=(field[i] / (100 * e * a_0 / En_h)))
     return eig_val
 
-@jit(cache=JIT_CACHE)
+@jit
 def stark_map_vec(H_0, mat_S, field, H_Z=0):
     """ Calculate eigenvalues and eigenvectors for H_0 + H_S. See stark_map().
 
