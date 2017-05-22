@@ -342,7 +342,7 @@ def stark_matrix(neff_vals, l_vals, m_vals):
     """
     num_cols = len(neff_vals)
     mat_I = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="calculate Stark terms", miniters=100):
+    for i in trange(num_cols, desc="calculate Stark terms", miniters=10):
         n_1 = neff_vals[i]
         l_1 = l_vals[i]
         m_1 = m_vals[i]
@@ -362,7 +362,7 @@ def eig_sort(w, v):
     return w[ids], v[:, ids]
 
 @jit
-def stark_map(H_0, mat_S, field, H_Z=0, saveEach=False):
+def stark_map(H_0, mat_S, field, H_Z=0):
     """ Calculate the eigenvalues for H_0 + H_S, where
 
          - H_0 is the field-free Hamiltonian,
@@ -384,8 +384,6 @@ def stark_map(H_0, mat_S, field, H_Z=0, saveEach=False):
         H_S = F * mat_S / mu_me
         # diagonalise, assuming matrix is Hermitian.
         eig_val[i] = np.linalg.eigh(H_0 + H_Z + H_S)[0]
-        if saveEach:
-            saveEig(data=eig_val[i], field=(field[i] / (100 * e * a_0 / En_h)))
     return eig_val
 
 @jit
