@@ -301,19 +301,19 @@ def rad_overlap(n1, l1, n2, l2, p=1.0):
     r2, y2 = wf_numerov(n2, l2, nmax)
     return abs(wf_overlap(r1, y1, r2, y2, p))
     
-def ang_overlap(l_1, l_2, m_1, m_2, field='crossed'):
+def ang_overlap(l_1, l_2, m_1, m_2, field_orientation):
     """ Angular overlap <l1, m| cos(theta) |l2, m>.
     """
     dl = l_2 - l_1
     dm = m_2 - m_1
     l, m = l_1, m_1
-    if field=='parallel':
+    if field_orientation=='parallel':
         if dm == 0:
             if dl == +1:
                 return +(((l+1)**2-m**2)/((2*l+3)*(2*l+1)))**0.5
             elif dl == -1:
                 return +((l**2-m**2)/((2*l+1)*(2*l-1)))**0.5
-    elif field=='crossed':
+    elif field_orientation=='crossed':
         if dm == +1:
             if dl == +1:
                 return -(0.5*(-1)**(m-2*l)) *  (((l+m+1)*(l+m+2))/((2*l+1)*(2*l+3)))**0.5 
@@ -327,17 +327,17 @@ def ang_overlap(l_1, l_2, m_1, m_2, field='crossed'):
     return 0.0
 
 @jit
-def stark_int(n_1, l_1, n_2, l_2, m_1, m_2):
+def stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation='parallel'):
     """ Stark interaction between states |n1, l1, m> and |n2, l2, m>.
     """
     if abs(l_1 - l_2) == 1:
         # Stark interaction
-        return ang_overlap(l_1, l_2, m_1, m_2) * rad_overlap(n_1, l_1, n_2, l_2)
+        return ang_overlap(l_1, l_2, m_1, m_2, field_orientation) * rad_overlap(n_1, l_1, n_2, l_2)
     else:
         return 0.0
 
 @jit
-def stark_matrix(neff_vals, l_vals, m_vals):
+def stark_matrix(neff_vals, l_vals, m_vals, field_orientation='parallel'):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
@@ -350,7 +350,7 @@ def stark_matrix(neff_vals, l_vals, m_vals):
             n_2 = neff_vals[j]
             l_2 = l_vals[j]
             m_2 = m_vals[j]
-            mat_I[i][j] = stark_int(n_1, l_1, n_2, l_2, m_1, m_2)
+            mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation)
             # assume matrix is symmetric
             mat_I[j][i] = mat_I[i][j]
     return mat_I

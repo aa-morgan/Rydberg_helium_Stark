@@ -49,8 +49,8 @@ def getImagesDir():
 # In[4]:
 
 # quantum numbers
-nmin = 55
-nmax = 56
+nmin = 68
+nmax = 71
 S = 1
 n_vals, L_vals, m_vals = get_nlm_vals(nmin, nmax)
 J_vals = get_J_vals(S, L_vals, 1)
@@ -58,6 +58,8 @@ J_vals = get_J_vals(S, L_vals, 1)
 neff = n_vals - get_qd(S, n_vals, L_vals, J_vals)
 # energy levels
 En = W_n(S, n_vals, L_vals, J_vals)
+# field orientation
+field_orientation = 'crossed'
 # field-free Hamiltonian
 H_0 = np.diag(En)
 if (IMPORT_MAT_S):
@@ -71,7 +73,7 @@ if (IMPORT_MAT_S):
         
 else:
     # find the off-diagonal terms of the Stark interaction matrix
-    mat_S = stark_matrix(neff, L_vals, m_vals)
+    mat_S = stark_matrix(neff, L_vals, m_vals, field_orientation)
     if SAVE_MAT_S:
         # Create fileaname for Stark map
         filename = "StarkIntMatrix_n_" + str(nmin) + "-" + str(nmax)
@@ -85,10 +87,10 @@ else:
 # In[5]:
 
 # specify the electric field
-field = np.linspace(0.00, 4.0, 11) # V /cm
+field = np.linspace(0.00, 4.0, 1) # V /cm
 field_au = field * 100 * e * a_0 / En_h
 # specify the magnetic field (in Telsa)
-B_z = 0# 1.5776E-3
+B_z = 1.5776E-3
 # (in atomic units)
 B_z_au = B_z / (2.35*10**5)
 # Zeeman interaction Hamiltonian
@@ -97,7 +99,7 @@ H_Z = np.diag(E_zeeman(m_vals, B_z_au))
 map1 = stark_map(H_0, mat_S, field_au, H_Z=H_Z)
 
 
-# In[15]:
+# In[6]:
 
 if(PLOT_STARK_MAP):
     # Stark map
@@ -141,7 +143,7 @@ if(PLOT_STARK_MAP):
 
 # # Write and Read files
 
-# In[9]:
+# In[ ]:
 
 if SAVE_STARK_MAP_DATA==True:
     # Create fileaname for Stark map
