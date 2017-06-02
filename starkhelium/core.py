@@ -293,14 +293,14 @@ def wf_overlap(r1, y1, r2, y2, p=1.0):
     return np.sum(y1 * y2 * r1**(2.0 + p))
 
 @jit(cache=True)
-def rad_overlap(n1, l1, n2, l2, p=1.0):
+def rad_overlap(n1, n2, l1, l2, p=1.0):
     """ Radial overlap for state n1, l1 and n2 l2.
     """
     nmax = max(n1, n2)
     r1, y1 = wf_numerov(n1, l1, nmax)
     r2, y2 = wf_numerov(n2, l2, nmax)
     return abs(wf_overlap(r1, y1, r2, y2, p))
-    
+
 def ang_overlap(l_1, l_2, m_1, m_2, field_orientation):
     """ Angular overlap <l1, m| cos(theta) |l2, m>.
     """
@@ -313,6 +313,17 @@ def ang_overlap(l_1, l_2, m_1, m_2, field_orientation):
                 return +(((l+1)**2-m**2)/((2*l+3)*(2*l+1)))**0.5
             elif dl == -1:
                 return +((l**2-m**2)/((2*l+1)*(2*l-1)))**0.5
+        elif dm == +1:
+            if dl == +1:
+                return -((l+m+2)*(l+m+1)/(2*(2*l+3)*(2*l+1)))**0.5
+            elif dl == -1:
+                return +((l-m)*(l-m-1)/(2*(2*l+1)*(2*l-1)))**0.5
+        elif dm == -1:
+            if dl == +1:
+                return +((l-m+2)*(l-m+1)/(2*(2*l+3)*(2*l+1)))**0.5
+            elif dl == -1:
+                return -((l+m)*(l+m-1)/(2*(2*l+1)*(2*l-1)))**0.5
+            
     elif field_orientation=='crossed':
         if dm == +1:
             if dl == +1:
@@ -332,12 +343,19 @@ def stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation='parallel'):
     """
     if abs(l_1 - l_2) == 1:
         # Stark interaction
-        return ang_overlap(l_1, l_2, m_1, m_2, field_orientation) * rad_overlap(n_1, l_1, n_2, l_2)
+        return ang_overlap(l_1, l_2, m_1, m_2, field_orientation) * rad_overlap(n_1, n_2, l_1, l_2)
     else:
         return 0.0
 
 @jit
-def stark_matrix(neff_vals, l_vals, m_vals, field_orientation='parallel'):
+def stark_matrix(neff_vals, l_vals, m_vals, b_field, field_orientation='parallel'):
+    if b_field:
+        return stark_matrix_with_B(neff_vals, l_vals, m_vals, field_orientation=field_orientation)
+    else:
+        return stark_matrix_without_B(neff_vals, l_vals, m_vals)
+    
+@jit
+def stark_matrix_with_B(neff_vals, l_vals, m_vals, field_orientation='parallel'):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
@@ -351,6 +369,23 @@ def stark_matrix(neff_vals, l_vals, m_vals, field_orientation='parallel'):
             l_2 = l_vals[j]
             m_2 = m_vals[j]
             mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation)
+            # assume matrix is symmetric
+            mat_I[j][i] = mat_I[i][j]
+    return mat_I
+
+@jit
+def stark_matrix_without_B(neff_vals, l_vals, m):
+    """ Stark interaction matrix.
+    """
+    num_cols = len(neff_vals)
+    mat_I = np.zeros([num_cols, num_cols])
+    for i in trange(num_cols, desc="calculate Stark terms"):
+        n_1 = neff_vals[i]
+        l_1 = l_vals[i]
+        for j in range(i + 1, num_cols):
+            n_2 = neff_vals[j]
+            l_2 = l_vals[j]
+            mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m, m)
             # assume matrix is symmetric
             mat_I[j][i] = mat_I[i][j]
     return mat_I
