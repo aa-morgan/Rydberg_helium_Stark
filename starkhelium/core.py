@@ -44,6 +44,9 @@ Z = 2
 mu_me = (mass_He - m_e) / mass_He
 mu_M = m_e / mass_He
 
+def starkhelium_version():
+    return 'v0.1, rmin=settable'
+
 @jit
 def get_nl_vals(nmin, nmax, m):
     """ n and l vals for each matrix column, using range n_min to n_max.
@@ -168,7 +171,7 @@ def E_zeeman(m_vals, B_z):
     return m_vals * B_z * (1/2)
 
 @jit
-def wf_numerov(n, l, nmax, step=0.005, rmin=1.0):
+def wf_numerov(n, l, nmax, step=0.005, rmin=0.65):
     """ Use the Numerov method to find the wavefunction for state n*, l, where
         n* = n - delta.
 
@@ -293,12 +296,12 @@ def wf_overlap(r1, y1, r2, y2, p=1.0):
     return np.sum(y1 * y2 * r1**(2.0 + p))
 
 @jit(cache=True)
-def rad_overlap(n1, n2, l1, l2, p=1.0):
+def rad_overlap(n1, n2, l1, l2, rmin, p=1.0,):
     """ Radial overlap for state n1, l1 and n2 l2.
     """
     nmax = max(n1, n2)
-    r1, y1 = wf_numerov(n1, l1, nmax)
-    r2, y2 = wf_numerov(n2, l2, nmax)
+    r1, y1 = wf_numerov(n1, l1, nmax, rmin=rmin)
+    r2, y2 = wf_numerov(n2, l2, nmax, rmin=rmin)
     return abs(wf_overlap(r1, y1, r2, y2, p))
 
 def ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
@@ -338,12 +341,12 @@ def ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
     return 0.0
 
 @jit
-def stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation='parallel', dm_allow=[0,-1,+1]):
+def stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation='parallel', dm_allow=[0,-1,+1], rmin=0.65):
     """ Stark interaction between states |n1, l1, m> and |n2, l2, m>.
     """
     if abs(l_1 - l_2) == 1:
         # Stark interaction
-        return ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow) * rad_overlap(n_1, n_2, l_1, l_2)
+        return ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow) * rad_overlap(n_1, n_2, l_1, l_2, rmin=rmin)
     else:
         return 0.0
     
