@@ -37,12 +37,16 @@ import os
 from datetime import datetime
 
 # constants
-En_h = alpha**2.0 * m_e * c**2.0
+Ry_inf = 10973731.568508
+En_h = 2*Ry_inf*h*c # alpha**2.0 * m_e * c**2.0
 a_0 = hbar/ (m_e * c * alpha)
 mass_He = 4.002602 * atomic_mass
 Z = 2
 mu_me = (mass_He - m_e) / mass_He
 mu_M = m_e / mass_He
+
+En_h_He = En_h * mu_me
+a_0_He = a_0 / mu_me
 
 def starkhelium_version():
     return 'v0.1, rmin=settable'
@@ -146,7 +150,7 @@ def En_0(neff):
     for n in neff:
         en = -0.5 * n**-2.0
         energy = np.append(energy, en)
-    return energy * mu_me
+    return energy
 
 @jit
 def W_n(S, n_vals, L_vals, J_vals):
@@ -160,7 +164,7 @@ def W_n(S, n_vals, L_vals, J_vals):
         en = -0.5 * (neff[i]**-2.0 - 3.0 * alpha**2.0 / (4.0 * n**4.0) + \
                      mu_M**2.0 * ((1.0 + (5.0 / 6.0) * (alpha * Z)**2.0)/ n**2.0))
         energy = np.append(energy, en)
-    return energy * mu_me
+    return energy
 
 @jit
 def E_zeeman(m_vals, B_z):
@@ -309,7 +313,7 @@ def ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
     """
     dl = l_2 - l_1
     dm = m_2 - m_1
-    l, m = l_1, m_1
+    l, m = int(l_1), int(m_1)
     if field_orientation=='parallel':
         if (dm == 0) and (dm in dm_allow):
             if dl == +1:
@@ -412,7 +416,7 @@ def stark_map(H_0, mat_S, field, H_Z=0):
     # loop over field values
     for i in trange(num_fields, desc="diagonalise Hamiltonian"):
         F = field[i]
-        H_S = F * mat_S / mu_me
+        H_S = F * mat_S
         # diagonalise, assuming matrix is Hermitian.
         eig_val[i] = np.linalg.eigh(H_0 + H_Z + H_S)[0]
     return eig_val
@@ -437,7 +441,7 @@ def stark_map_vec(H_0, mat_S, field, H_Z=0):
     # loop over field values
     for i in trange(num_fields, desc="diagonalise Hamiltonian"):
         F = field[i]
-        H_S = F * mat_S / mu_me
+        H_S = F * mat_S
         # diagonalise, assuming matrix is Hermitian.
         eig_val[i], eig_vec[i] = np.linalg.eigh(H_0 + H_Z + H_S)
     return eig_val, eig_vec
