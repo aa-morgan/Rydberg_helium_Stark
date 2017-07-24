@@ -49,7 +49,7 @@ En_h_He = En_h * mu_me
 a_0_He = a_0 / mu_me
 
 def starkhelium_version():
-    return 'v0.1, rmin=settable'
+    return 'v0.5'
 
 @jit
 def get_nl_vals(nmin, nmax, m):
@@ -175,7 +175,7 @@ def E_zeeman(m_vals, B_z):
     return m_vals * B_z * (1/2)
 
 @jit
-def wf_numerov(n, l, nmax, step=0.005, rmin=0.65):
+def wf_numerov(n, l, nmax, rmin, step):
     """ Use the Numerov method to find the wavefunction for state n*, l, where
         n* = n - delta.
 
@@ -300,13 +300,13 @@ def wf_overlap(r1, y1, r2, y2, p=1.0):
     return np.sum(y1 * y2 * r1**(2.0 + p))
 
 @jit(cache=True)
-def rad_overlap(n1, n2, l1, l2, rmin, p=1.0,):
+def rad_overlap(n_1, n_2, l_1, l_2, rmin, step, p=1.0):
     """ Radial overlap for state n1, l1 and n2 l2.
     """
-    nmax = max(n1, n2)
-    r1, y1 = wf_numerov(n1, l1, nmax, rmin=rmin)
-    r2, y2 = wf_numerov(n2, l2, nmax, rmin=rmin)
-    return abs(wf_overlap(r1, y1, r2, y2, p))
+    nmax = max(n_1, n_2)
+    r1, y1 = wf_numerov(n_1, l_1, nmax, rmin, step)
+    r2, y2 = wf_numerov(n_2, l_2, nmax, rmin, step)
+    return (wf_overlap(r1, y1, r2, y2, p))
 
 def ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
     """ Angular overlap <l1, m| cos(theta) |l2, m>.
@@ -334,9 +334,9 @@ def ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
     elif field_orientation=='crossed':
         if dm == +1:
             if dl == +1:
-                return -(0.5*(-1)**(m-2*l)) *  (((l+m+1)*(l+m+2))/((2*l+1)*(2*l+3)))**0.5 
+                return +(0.5*(-1)**(m-2*l)) *  (((l+m+1)*(l+m+2))/((2*l+1)*(2*l+3)))**0.5 
             elif dl == -1:
-                return +(0.5*(-1)**(-m+2*l)) * (((l-m-1)*(l-m))  /((2*l-1)*(2*l+1)))**0.5
+                return -(0.5*(-1)**(-m+2*l)) * (((l-m-1)*(l-m))  /((2*l-1)*(2*l+1)))**0.5
         elif dm == -1:
             if dl == +1:
                 return +(0.5*(-1)**(m-2*l)) *  (((l-m+1)*(l-m+2))/((2*l+1)*(2*l+3)))**0.5
@@ -345,22 +345,22 @@ def ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
     return 0.0
 
 @jit
-def stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation='parallel', dm_allow=[0,-1,+1], rmin=0.65):
+def stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation, dm_allow, step, rmin=0.65):
     """ Stark interaction between states |n1, l1, m> and |n2, l2, m>.
     """
     if abs(l_1 - l_2) == 1:
         # Stark interaction
-        return ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow) * rad_overlap(n_1, n_2, l_1, l_2, rmin=rmin)
+        return ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow) * rad_overlap(n_1, n_2, l_1, l_2, rmin, step)
     else:
         return 0.0
     
 @jit
-def stark_matrix(neff_vals, l_vals, m_vals, field_orientation='parallel', dm_allow=[0,-1,+1]):
+def stark_matrix(neff_vals, l_vals, m_vals, field_orientation, dm_allow=[0], numerov_step=0.005):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
     mat_I = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="calculate Stark terms", miniters=10):
+    for i in trange(num_cols, desc="calculate Stark terms"):
         n_1 = neff_vals[i]
         l_1 = l_vals[i]
         m_1 = m_vals[i]
@@ -368,13 +368,13 @@ def stark_matrix(neff_vals, l_vals, m_vals, field_orientation='parallel', dm_all
             n_2 = neff_vals[j]
             l_2 = l_vals[j]
             m_2 = m_vals[j]
-            mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation, dm_allow=dm_allow)
+            mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation, dm_allow, numerov_step)
             # assume matrix is symmetric
             mat_I[j][i] = mat_I[i][j]
     return mat_I
 
 @jit
-def stark_matrix_select_m(neff_vals, l_vals, m, dm_allow=[0,-1,+1]):
+def stark_matrix_select_m(neff_vals, l_vals, m, field_orientation, dm_allow=[0], numerov_step=0.005):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
@@ -385,7 +385,7 @@ def stark_matrix_select_m(neff_vals, l_vals, m, dm_allow=[0,-1,+1]):
         for j in range(i + 1, num_cols):
             n_2 = neff_vals[j]
             l_2 = l_vals[j]
-            mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m, m, dm_allow=dm_allow)
+            mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m, m, field_orientation, dm_allow, numerov_step)
             # assume matrix is symmetric
             mat_I[j][i] = mat_I[i][j]
     return mat_I
