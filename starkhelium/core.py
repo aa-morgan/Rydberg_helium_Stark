@@ -208,6 +208,7 @@ def wf_numerov(n, l, nmax, rmin, step):
     # Numerov method
     i += 1
     r = r_sub1
+    drr = exp(-step)**(-l - 1) - 1.0
     while r >= rmin:
         ## next step
         r = rmax * exp(-i*step)
@@ -218,8 +219,7 @@ def wf_numerov(n, l, nmax, rmin, step):
         ## check for divergence
         if r < r_in:
             dy = abs((y - y_sub1) / y_sub1)
-            dr = (r**(-l-1) - r_sub1**(-l-1)) / r_sub1**(-l-1)
-            if dy > dr:
+            if dy > drr:
                 break
 
         ## store vals
@@ -227,7 +227,6 @@ def wf_numerov(n, l, nmax, rmin, step):
         yvals.append(y)
 
         ## next iteration
-        r_sub1 = r
         g_sub2 = g_sub1
         g_sub1 = g
         y_sub2 = y_sub1
