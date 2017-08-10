@@ -59,7 +59,7 @@ def get_nl_vals(nmin, nmax, m):
     n_vals = np.array([], dtype='int32')
     l_vals = np.array([], dtype='int32')
     for n in n_rng:
-        l_rng = np.arange(m, n)
+        l_rng = np.arange(np.abs(m), n)
         n_vals = np.append(n_vals, np.array(np.zeros_like(l_rng) + n))
         l_vals = np.append(l_vals, l_rng)
     return n_vals, l_vals
@@ -173,6 +173,10 @@ def E_zeeman(m_vals, B_z):
         -- atomic units --
     """
     return m_vals * B_z * (1/2)
+
+@jit
+def chose_step_poly(nmax, lmax, step_low, step_high, expo):
+    return (lmax/nmax)**expo * (step_high-step_low) + step_low
 
 @jit
 def wf_numerov(n, l, nmax, rmin, step):
@@ -299,17 +303,48 @@ def wf_overlap(r1, y1, r2, y2, p=1.0):
     r1, y1, r2, y2 = wf_align(r1, y1, r2, y2)
     return np.sum(y1 * y2 * r1**(2.0 + p))
 
-@jit(cache=True)
-def rad_overlap(n_1, n_2, l_1, l_2, rmin, step, p=1.0):
+def rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, wf_overlap_dict={}, p=1.0):
     """ Radial overlap for state n1, l1 and n2 l2.
     """
-    nmax = max(n_1, n_2)
-    r1, y1 = wf_numerov(n_1, l_1, nmax, rmin, step)
-    r2, y2 = wf_numerov(n_2, l_2, nmax, rmin, step)
-    return (wf_overlap(r1, y1, r2, y2, p))
+    method = 0
+    if method == 0:
+        nmax = max(n_val_1, n_val_2)
+        lmax = max(l_1, l_2)
+        numerov_step = chose_step_poly(nmax, lmax, *step_params)
 
-def ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
+        # Re-order pair of (n,l) to store in dict, as not to have duplicates
+        if (int(n_val_1) == int(n_val_2)):
+            n_first, n_last = int(n_val_1), int(n_val_2)
+            if (int(l_1) > int(l_2)):
+                l_first, l_last = int(l_1), int(l_2)
+            else:
+                l_first, l_last = int(l_2), int(l_1)
+        elif (int(n_val_1) > int(n_val_2)):
+            n_first, n_last, l_first, l_last = int(n_val_1), int(n_val_2), int(l_1), int(l_2)
+        elif (int(n_val_1) < int(n_val_2)):
+            n_first, n_last, l_first, l_last = int(n_val_2), int(n_val_1), int(l_2), int(l_1)
+
+        overlap_key = (int(n_first), int(l_first), int(n_last), int(l_last), int(p))
+        overlap_val = wf_overlap_dict.get(overlap_key, None)
+        nmax_eff = max(n_eff_1, n_eff_2)
+
+        if overlap_val == None:
+            r1, y1 = wf_numerov(n_eff_1, l_1, nmax_eff, rmin, numerov_step)
+            r2, y2 = wf_numerov(n_eff_2, l_2, nmax_eff, rmin, numerov_step)
+            wf_overlap_dict[overlap_key] = wf_overlap(r1, y1, r2, y2, p)
+            return wf_overlap_dict[overlap_key]
+        else:
+            return overlap_val
+    elif method == 1:
+        nmax_eff = max(n_eff_1, n_eff_2)
+        numerov_step = 0.005
+        r1, y1 = wf_numerov(n_eff_1, l_1, nmax_eff, rmin, numerov_step)
+        r2, y2 = wf_numerov(n_eff_2, l_2, nmax_eff, rmin, numerov_step)
+        return wf_overlap(r1, y1, r2, y2, p)
+
+def ang_overlap_stark(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
     """ Angular overlap <l1, m| cos(theta) |l2, m>.
+        For Stark interaction
     """
     dl = l_2 - l_1
     dm = m_2 - m_1
@@ -345,47 +380,105 @@ def ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
     return 0.0
 
 @jit
-def stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation, dm_allow, step, rmin=0.65):
+def ang_overlap_diamagnetic(l_1, l_2, m_1, m_2):
+    """ Angular overlap <l1, m| sin^2(theta) |l2, m>. 
+        For diamagnetic interaction
+    """
+    dl = l_2 - l_1
+    dm = m_2 - m_1
+    lmin = min(l_1, l_2)
+    l, m = int(l_1), int(m_1)
+    if (dm == 0):
+        if (dl == 0):
+            return (2*(l**2+l-1+m**2))/((2*l-1)*(2*l+3))
+        elif (dl == 2):
+            return (( (lmin+m+2)*(lmin+m+1)*(lmin-m+2)*(lmin-m+1) )/( (2*lmin+5)*((2*lmin+3)**2)*(2*lmin+1) ))**0.5
+    return 0.0
+
+@jit
+def stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, 
+              field_orientation, dm_allow, step_params, wf_overlap_dict={}, rmin=0.65):
     """ Stark interaction between states |n1, l1, m> and |n2, l2, m>.
     """
-    if abs(l_1 - l_2) == 1:
+    if (abs(l_1 - l_2) == 1) and (abs(m_1 - m_2) <= 1):
         # Stark interaction
-        return ang_overlap(l_1, l_2, m_1, m_2, field_orientation, dm_allow) * rad_overlap(n_1, n_2, l_1, l_2, rmin, step)
+        return ang_overlap_stark(l_1, l_2, m_1, m_2, field_orientation, dm_allow) * \
+               rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, wf_overlap_dict=wf_overlap_dict, p=1.0)
     else:
         return 0.0
     
 @jit
-def stark_matrix(neff_vals, l_vals, m_vals, field_orientation, dm_allow=[0], numerov_step=0.005):
+def diamagnetic_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, step_params, wf_overlap_dict={}, rmin=0.65):
+    """ Diamagnetic interaction between states |n1, l1, m> and |n2, l2, m>.
+    """
+    if (abs(l_1 - l_2) in [0,2]) and (abs(m_1 - m_2) == 0):
+        # Diamagnetic interaction
+        return ang_overlap_diamagnetic(l_1, l_2, m_1, m_2) * \
+               rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, wf_overlap_dict=wf_overlap_dict, p=2.0)
+    else:
+        return 0.0
+    
+@jit
+def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation, dm_allow=[0], step_params=[0.005,0.005,1.0]):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
-    mat_I = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="calculate Stark terms"):
-        n_1 = neff_vals[i]
+    mat_S = np.zeros([num_cols, num_cols])
+    wf_overlap_dict = {}
+    for i in trange(num_cols, desc="Calculating Stark terms"):
+        n_val_1 = n_vals[i]
+        n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
         m_1 = m_vals[i]
         for j in range(i + 1, num_cols):
-            n_2 = neff_vals[j]
+            n_val_2 = n_vals[j]
+            n_eff_2 = neff_vals[j]
             l_2 = l_vals[j]
             m_2 = m_vals[j]
-            mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m_1, m_2, field_orientation, dm_allow, numerov_step)
+            mat_S[i][j] = stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, 
+                                    field_orientation, dm_allow, step_params, wf_overlap_dict=wf_overlap_dict)
             # assume matrix is symmetric
-            mat_I[j][i] = mat_I[i][j]
-    return mat_I
+            mat_S[j][i] = mat_S[i][j]
+    return mat_S
 
 @jit
-def stark_matrix_select_m(neff_vals, l_vals, m, field_orientation, dm_allow=[0], numerov_step=0.005):
-    """ Stark interaction matrix.
+def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.005,1.0]):
+    """ Diamagnetic interaction matrix.
     """
     num_cols = len(neff_vals)
+    mat_D = np.zeros([num_cols, num_cols])
+    wf_overlap_dict = {}
+    for i in trange(num_cols, desc="Calculating diamagnetic terms"):
+        n_val_1 = n_vals[i]
+        n_eff_1 = neff_vals[i]
+        l_1 = l_vals[i]
+        m_1 = m_vals[i]
+        for j in range(i + 1, num_cols):
+            n_val_2 = n_vals[j]
+            n_eff_2 = neff_vals[j]
+            l_2 = l_vals[j]
+            m_2 = m_vals[j]
+            mat_D[i][j] = diamagnetic_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, 
+                                          step_params, wf_overlap_dict=wf_overlap_dict)
+            # assume matrix is symmetric
+            mat_D[j][i] = mat_D[i][j]
+    return mat_D
+
+@jit
+def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, dm_allow=[0], step_params=[0.005,0.005,1.0]):
+    """ Stark interaction matrix.
+    """
+    num_cols = len(neff_vals)    
     mat_I = np.zeros([num_cols, num_cols])
     for i in trange(num_cols, desc="calculate Stark terms"):
-        n_1 = neff_vals[i]
+        n_val_1 = n_vals[i]
+        n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
         for j in range(i + 1, num_cols):
-            n_2 = neff_vals[j]
+            n_val_2 = n_vals[j]
+            n_eff_2 = neff_vals[j]
             l_2 = l_vals[j]
-            mat_I[i][j] = stark_int(n_1, n_2, l_1, l_2, m, m, field_orientation, dm_allow, numerov_step)
+            mat_I[i][j] = stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m, m, field_orientation, dm_allow, step_params)
             # assume matrix is symmetric
             mat_I[j][i] = mat_I[i][j]
     return mat_I
@@ -397,7 +490,7 @@ def eig_sort(w, v):
     return w[ids], v[:, ids]
 
 @jit
-def stark_map(H_0, mat_S, field, H_Z=0):
+def stark_map(H_0, mat_S, field, H_Z=0, H_D=0):
     """ Calculate the eigenvalues for H_0 + H_S, where
 
          - H_0 is the field-free Hamiltonian,
@@ -418,11 +511,11 @@ def stark_map(H_0, mat_S, field, H_Z=0):
         F = field[i]
         H_S = F * mat_S
         # diagonalise, assuming matrix is Hermitian.
-        eig_val[i] = np.linalg.eigh(H_0 + H_Z + H_S)[0]
+        eig_val[i] = np.linalg.eigh(H_0 + H_Z + H_S + H_D)[0]
     return eig_val
 
 @jit
-def stark_map_vec(H_0, mat_S, field, H_Z=0):
+def stark_map_vec(H_0, mat_S, field, H_Z=0, H_D=0):
     """ Calculate eigenvalues and eigenvectors for H_0 + H_S. See stark_map().
 
         return eig_val [array.shape(num_fields, num_states)],
@@ -443,5 +536,5 @@ def stark_map_vec(H_0, mat_S, field, H_Z=0):
         F = field[i]
         H_S = F * mat_S
         # diagonalise, assuming matrix is Hermitian.
-        eig_val[i], eig_vec[i] = np.linalg.eigh(H_0 + H_Z + H_S)
+        eig_val[i], eig_vec[i] = np.linalg.eigh(H_0 + H_Z + H_S + H_D)
     return eig_val, eig_vec
