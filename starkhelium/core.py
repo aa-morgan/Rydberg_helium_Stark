@@ -44,12 +44,8 @@ mass_He = 4.002602 * atomic_mass
 Z = 2
 mu_me = (mass_He - m_e) / mass_He
 mu_M = m_e / mass_He
-
 En_h_He = En_h * mu_me
 a_0_He = a_0 / mu_me
-
-def starkhelium_version():
-    return 'v0.5'
 
 @jit
 def get_nl_vals(nmin, nmax, m):
@@ -174,9 +170,19 @@ def E_zeeman(m_vals, B_z):
     """
     return m_vals * B_z * (1/2)
 
+def chose_step(nmax, lmax, step_low, step_high, interp_type, interp_params):
+    if interp_type == 'poly':
+        return chose_step_poly(nmax, lmax, step_low, step_high, *interp_params)
+    elif interp_type == 'sigmoid':
+        return chose_step_sigmoid(nmax, lmax, step_low, step_high, *interp_params)
+    
 @jit
-def chose_step_poly(nmax, lmax, step_low, step_high, expo):
-    return (lmax/nmax)**expo * (step_high-step_low) + step_low
+def chose_step_poly(nmax, lmax, step_low, step_high, exponent):
+    return (lmax/nmax)**exponent * (step_high-step_low) + step_low
+
+@jit
+def chose_step_sigmoid(nmax, lmax, step_low, step_high, width, mid):
+    return (( step_high-step_low )/( 1+np.exp( -width*( (lmax/nmax)-mid ) ) )) + step_low
 
 @jit
 def wf_numerov(n, l, nmax, rmin, step):
@@ -308,7 +314,7 @@ def rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params,
     """
     nmax = max(n_eff_1, n_eff_2)
     lmax = max(l_1, l_2)
-    numerov_step = chose_step_poly(nmax, lmax, *step_params)
+    numerov_step = chose_step(nmax, lmax, *step_params)
     if useDict:
          # Re-order pair of (n,l) to store in dict, as not to have duplicates
         if (int(n_val_1) == int(n_val_2)):
@@ -387,8 +393,8 @@ def ang_overlap_diamagnetic(l_1, l_2, m_1, m_2):
     if (dm == 0):
         if (dl == 0):
             return (2*(l**2+l-1+m**2))/((2*l-1)*(2*l+3))
-        elif (dl == 2):
-            return (( (lmin+m+2)*(lmin+m+1)*(lmin-m+2)*(lmin-m+1) )/( (2*lmin+5)*((2*lmin+3)**2)*(2*lmin+1) ))**0.5
+        elif (abs(dl) == 2):
+            return -(( (lmin+m+2)*(lmin+m+1)*(lmin-m+2)*(lmin-m+1) )/( (2*lmin+5)*((2*lmin+3)**2)*(2*lmin+1) ))**0.5
     return 0.0
 
 @jit
@@ -415,7 +421,7 @@ def diamagnetic_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, step
         return 0.0
     
 @jit
-def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation, dm_allow=[0], step_params=[0.005,0.005,1.0]):
+def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation, dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0]]):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
@@ -438,7 +444,7 @@ def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation, dm_allow=
     return mat_S
 
 @jit
-def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.005,1.0]):
+def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.005,'poly',[1.0]]):
     """ Diamagnetic interaction matrix.
     """
     num_cols = len(neff_vals)
@@ -461,7 +467,7 @@ def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.0
     return mat_D
 
 @jit
-def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, dm_allow=[0], step_params=[0.005,0.005,1.0]):
+def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, dm_allow=[0],step_params=[0.005,0.005,'poly',[1.0]]):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)    
