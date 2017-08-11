@@ -8,7 +8,7 @@
 import os
 import numpy as np
 #import matplotlib.pyplot as plt
-#get_ipython().magic('matplotlib inline')
+#%matplotlib inline
 from starkhelium import *
 from tqdm import trange, tqdm
 from scipy.constants import h, hbar, c, alpha, m_e, e, epsilon_0, atomic_mass, pi, physical_constants
@@ -21,9 +21,9 @@ scl = c*10**-9 * En_h /(h * c);
 
 # User variables
   # Whether to import and save the Stark interaction matrix
-IMPORT_MAT_S, CALC_MAT_S, SAVE_MAT_S = False, True, False
+IMPORT_MAT_S, CALC_MAT_S, SAVE_MAT_S = False, True, True
   # Whether to import and save the Diamagnetic interaction matrix
-IMPORT_MAT_D, CALC_MAT_D, SAVE_MAT_D = False, True, False
+IMPORT_MAT_D, CALC_MAT_D, SAVE_MAT_D = False, True, True
   # Whether to save the Stark map data
 SAVE_STARK_MAP_DATA = True
 
@@ -69,11 +69,11 @@ def importIntMat(name, nmin, nmax, step_params):
         raise
 
 
-# In[4]:
+# In[5]:
 
 # quantum numbers
-nmin = 10
-nmax = 12
+nmin = 69
+nmax = 74
 S = 1
 n_vals, L_vals, m_vals = get_nlm_vals(nmin, nmax)
 J_vals = get_J_vals(S, L_vals, 1)
@@ -89,21 +89,26 @@ H_0 = np.diag(En)
 # Numerov step size
 step_low = 0.005
 step_high = 0.005
-step_expo = 1.0
-step_params = [step_low, step_high, step_expo]
+interp_type = 'sigmoid'
+interp_params = [30.0,0.75]
+step_params = [step_low, step_high, interp_type, interp_params]
 
 if IMPORT_MAT_S: mat_S = importIntMat('Stark', nmin, nmax, step_params)
 elif CALC_MAT_S: 
     mat_S = stark_matrix(n_vals, neff, L_vals, m_vals, field_orientation, step_params=step_params)
-    if SAVE_MAT_S: saveIntMat(mat_S, 'Stark', nmin, nmax, step_params)
+    if SAVE_MAT_S: 
+        saveIntMat(mat_S, 'Stark', nmin, nmax, step_params)
+        del mat_S
             
 if IMPORT_MAT_D: mat_D = importIntMat('Diamagnetic', nmin, nmax, step_params)
 elif CALC_MAT_D: 
     mat_D = diamagnetic_matrix(n_vals, neff, L_vals, m_vals, step_params=step_params)
-    if SAVE_MAT_D: saveIntMat(mat_D, 'Diamagnetic', nmin, nmax, step_params)
+    if SAVE_MAT_D: 
+        saveIntMat(mat_D, 'Diamagnetic', nmin, nmax, step_params)
+        del mat_D
 
 
-# In[5]:
+# In[ ]:
 
 # specify the electric field
 field = np.linspace(1.0, 2.0, 11) # V /cm
@@ -116,7 +121,7 @@ B_z_au = B_z / (hbar/(e*a_0_He**2))
 H_Z = np.diag(E_zeeman(m_vals, B_z_au))
 # Diamagnetic interaction Hamiltonian
 if IMPORT_MAT_D or CALC_MAT_D:
-    H_D = mat_D * B_z_au**2 * (e**2/(8*m_e))
+    H_D = mat_D * (B_z_au**2)/8
 else:
     H_D = 0
 
