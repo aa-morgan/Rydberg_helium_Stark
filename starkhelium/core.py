@@ -303,16 +303,14 @@ def wf_overlap(r1, y1, r2, y2, p=1.0):
     r1, y1, r2, y2 = wf_align(r1, y1, r2, y2)
     return np.sum(y1 * y2 * r1**(2.0 + p))
 
-def rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, wf_overlap_dict={}, p=1.0):
+def rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, useDict=True, wf_overlap_dict={}, p=1.0):
     """ Radial overlap for state n1, l1 and n2 l2.
     """
-    method = 0
-    if method == 0:
-        nmax = max(n_val_1, n_val_2)
-        lmax = max(l_1, l_2)
-        numerov_step = chose_step_poly(nmax, lmax, *step_params)
-
-        # Re-order pair of (n,l) to store in dict, as not to have duplicates
+    nmax = max(n_eff_1, n_eff_2)
+    lmax = max(l_1, l_2)
+    numerov_step = chose_step_poly(nmax, lmax, *step_params)
+    if useDict:
+         # Re-order pair of (n,l) to store in dict, as not to have duplicates
         if (int(n_val_1) == int(n_val_2)):
             n_first, n_last = int(n_val_1), int(n_val_2)
             if (int(l_1) > int(l_2)):
@@ -326,22 +324,20 @@ def rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params,
 
         overlap_key = (int(n_first), int(l_first), int(n_last), int(l_last), int(p))
         overlap_val = wf_overlap_dict.get(overlap_key, None)
-        nmax_eff = max(n_eff_1, n_eff_2)
 
         if overlap_val == None:
-            r1, y1 = wf_numerov(n_eff_1, l_1, nmax_eff, rmin, numerov_step)
-            r2, y2 = wf_numerov(n_eff_2, l_2, nmax_eff, rmin, numerov_step)
+            r1, y1 = wf_numerov(n_eff_1, l_1, nmax, rmin, numerov_step)
+            r2, y2 = wf_numerov(n_eff_2, l_2, nmax, rmin, numerov_step)
             wf_overlap_dict[overlap_key] = wf_overlap(r1, y1, r2, y2, p)
             return wf_overlap_dict[overlap_key]
         else:
             return overlap_val
-    elif method == 1:
-        nmax_eff = max(n_eff_1, n_eff_2)
-        numerov_step = 0.005
-        r1, y1 = wf_numerov(n_eff_1, l_1, nmax_eff, rmin, numerov_step)
-        r2, y2 = wf_numerov(n_eff_2, l_2, nmax_eff, rmin, numerov_step)
+    else:
+        r1, y1 = wf_numerov(n_eff_1, l_1, nmax, rmin, numerov_step)
+        r2, y2 = wf_numerov(n_eff_2, l_2, nmax, rmin, numerov_step)
         return wf_overlap(r1, y1, r2, y2, p)
 
+@jit
 def ang_overlap_stark(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
     """ Angular overlap <l1, m| cos(theta) |l2, m>.
         For Stark interaction
