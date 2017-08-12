@@ -60,7 +60,7 @@ def saveIntMat(mat_I, name, nmin, nmax, step_params):
     np.save(fileout, mat_I)
     
 def importIntMat(name, nmin, nmax, step_params):
-    filename = getFilenameInt(name, nmin, nmax, step_params) + ".npy"
+    filename = name + "IntMatrix_n_" + str(nmin) + "-" + str(nmax) + ".npy"
     directory = getDataDir()
     filein = os.path.join(directory, filename)
     try:
@@ -69,7 +69,7 @@ def importIntMat(name, nmin, nmax, step_params):
         raise
 
 
-# In[5]:
+# In[4]:
 
 # quantum numbers
 nmin = 69
