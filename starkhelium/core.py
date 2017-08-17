@@ -402,7 +402,9 @@ def stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2,
               field_orientation, dm_allow, step_params, wf_overlap_dict={}, rmin=0.65):
     """ Stark interaction between states |n1, l1, m> and |n2, l2, m>.
     """
-    if (abs(l_1 - l_2) == 1) and (abs(m_1 - m_2) <= 1):
+    dl = l_2 - l_1
+    dm = m_2 - m_1
+    if (abs(dl) == 1) and (abs(dm) <= 1):
         # Stark interaction
         return ang_overlap_stark(l_1, l_2, m_1, m_2, field_orientation, dm_allow) * \
                rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, wf_overlap_dict=wf_overlap_dict, p=1.0)
@@ -444,6 +446,27 @@ def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation, dm_allow=
     return mat_S
 
 @jit
+def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, dm_allow=[0],step_params=[0.005,0.005,'poly',[1.0]]):
+    """ Stark interaction matrix.
+    """
+    num_cols = len(neff_vals)    
+    mat_I = np.zeros([num_cols, num_cols])
+    wf_overlap_dict = {}
+    for i in trange(num_cols, desc="calculate Stark terms"):
+        n_val_1 = n_vals[i]
+        n_eff_1 = neff_vals[i]
+        l_1 = l_vals[i]
+        for j in range(i + 1, num_cols):
+            n_val_2 = n_vals[j]
+            n_eff_2 = neff_vals[j]
+            l_2 = l_vals[j]
+            mat_I[i][j] = stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m, m, 
+                                    field_orientation, dm_allow, step_params, wf_overlap_dict=wf_overlap_dict)
+            # assume matrix is symmetric
+            mat_I[j][i] = mat_I[i][j]
+    return mat_I
+
+@jit
 def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.005,'poly',[1.0]]):
     """ Diamagnetic interaction matrix.
     """
@@ -466,25 +489,6 @@ def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.0
             mat_D[j][i] = mat_D[i][j]
     return mat_D
 
-@jit
-def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, dm_allow=[0],step_params=[0.005,0.005,'poly',[1.0]]):
-    """ Stark interaction matrix.
-    """
-    num_cols = len(neff_vals)    
-    mat_I = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="calculate Stark terms"):
-        n_val_1 = n_vals[i]
-        n_eff_1 = neff_vals[i]
-        l_1 = l_vals[i]
-        for j in range(i + 1, num_cols):
-            n_val_2 = n_vals[j]
-            n_eff_2 = neff_vals[j]
-            l_2 = l_vals[j]
-            mat_I[i][j] = stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m, m, field_orientation, dm_allow, step_params)
-            # assume matrix is symmetric
-            mat_I[j][i] = mat_I[i][j]
-    return mat_I
-
 def eig_sort(w, v):
     """ sort eignenvalues and eigenvectors by eigenvalue.
     """
@@ -492,7 +496,7 @@ def eig_sort(w, v):
     return w[ids], v[:, ids]
 
 @jit
-def stark_map(H_0, mat_S, field, H_Z=0, H_D=0):
+def stark_map(H_0, mat_S, field, H_Z=0, H_D=0, returnEigVecs=False):
     """ Calculate the eigenvalues for H_0 + H_S, where
 
          - H_0 is the field-free Hamiltonian,
@@ -500,29 +504,14 @@ def stark_map(H_0, mat_S, field, H_Z=0, H_D=0):
          - D is the electric dipole moment,
          - F is each value of the electric field (a.u.),
          - mat_S is the Stark interaction matrix.
-         - H_Z is the Zeeman Hamiltonian
+         - H_Z is the Zeeman interaction Hamiltonian
+         - H_D is the Diamagnetic interaction Hamiltonian
 
         return eig_val [array.shape(num_fields, num_states)]
-    """
-    num_fields = len(field)
-    num_cols = np.shape(H_0)[0]
-    # initialise output arrays
-    eig_val = np.empty((num_fields, num_cols), dtype=float)
-    # loop over field values
-    for i in trange(num_fields, desc="diagonalise Hamiltonian"):
-        F = field[i]
-        H_S = F * mat_S
-        # diagonalise, assuming matrix is Hermitian.
-        eig_val[i] = np.linalg.eigh(H_0 + H_Z + H_S + H_D)[0]
-    return eig_val
-
-@jit
-def stark_map_vec(H_0, mat_S, field, H_Z=0, H_D=0):
-    """ Calculate eigenvalues and eigenvectors for H_0 + H_S. See stark_map().
-
+            or 
         return eig_val [array.shape(num_fields, num_states)],
                eig_vec [array.shape(num_fields, num_states, num_states)]
-
+               
          ------------------------------------------------------------------
          Note: A significant amount of memory may be required to hold the
                array of eigenvectors.
@@ -532,11 +521,17 @@ def stark_map_vec(H_0, mat_S, field, H_Z=0, H_D=0):
     num_cols = np.shape(H_0)[0]
     # initialise output arrays
     eig_val = np.empty((num_fields, num_cols), dtype=float)
-    eig_vec = np.empty((num_fields, num_cols, num_cols), dtype=float)
+    if returnEigVecs: eig_vec = np.empty((num_fields, num_cols, num_cols), dtype=float)
     # loop over field values
     for i in trange(num_fields, desc="diagonalise Hamiltonian"):
         F = field[i]
         H_S = F * mat_S
         # diagonalise, assuming matrix is Hermitian.
-        eig_val[i], eig_vec[i] = np.linalg.eigh(H_0 + H_Z + H_S + H_D)
-    return eig_val, eig_vec
+        if returnEigVecs:
+            eig_val[i], eig_vec[i] = np.linalg.eigh(H_0 + H_Z + H_S + H_D)
+        else:
+            eig_val[i] = np.linalg.eigh(H_0 + H_Z + H_S + H_D)[0]
+    if returnEigVecs:
+        return eig_val, eig_vec
+    else:
+        return eig_val

@@ -25,6 +25,12 @@ var/
 *.egg
 .DS_Store
 notebooks/data*
+*.pdf
+*.png
+*.npy
+*.tar.gz
+*.jpg
+*.eps
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
