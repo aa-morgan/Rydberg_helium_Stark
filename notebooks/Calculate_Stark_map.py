@@ -3,7 +3,7 @@
 
 # # Calculate Stark map for triplet helium
 
-# In[1]:
+# In[7]:
 
 import os
 import numpy as np
@@ -17,18 +17,19 @@ En_h = alpha**2.0 * m_e * c**2.0;
 scl = c*10**-9 * En_h /(h * c);
 
 
-# In[2]:
+# In[8]:
 
 # User variables
   # Whether to import and save the Stark interaction matrix
 IMPORT_MAT_S, CALC_MAT_S, SAVE_MAT_S = False, True, True
   # Whether to import and save the Diamagnetic interaction matrix
 IMPORT_MAT_D, CALC_MAT_D, SAVE_MAT_D = False, True, True
-  # Whether to save the Stark map data
-SAVE_STARK_MAP_DATA = True
+  # Whether to save the eigenvalues and eigenvectors
+SAVE_EIG_VALS = True
+SAVE_EIG_VECS = False
 
 
-# In[3]:
+# In[9]:
 
 # Helper functions
 def getDataDir():
@@ -69,7 +70,7 @@ def importIntMat(name, nmin, nmax, step_params):
         raise
 
 
-# In[4]:
+# In[ ]:
 
 # quantum numbers
 nmin = 69
@@ -90,7 +91,7 @@ H_0 = np.diag(En)
 step_low = 0.005
 step_high = 0.005
 interp_type = 'sigmoid'
-interp_params = [30.0,0.75]
+interp_params = [10.0,0.5]
 step_params = [step_low, step_high, interp_type, interp_params]
 
 if IMPORT_MAT_S: mat_S = importIntMat('Stark', nmin, nmax, step_params)
@@ -126,12 +127,13 @@ else:
     H_D = 0
 
 # diagonalise for each field
-stark_map = stark_map(H_0, mat_S, field_au, H_Z=H_Z, H_D=H_D)
-if SAVE_STARK_MAP_DATA:
+eig_vals_vecs = stark_map(H_0, mat_S, field_au, H_Z=H_Z, H_D=H_D, returnEigVecs=SAVE_EIG_VECS)
+
+if SAVE_EIG_VALS or SAVE_EIG_VECS:
     # Save Stark map to file
     filename = getFilenameStarkMap(nmin, nmax, step_params, field, B_z)
     fileout = os.path.join(getDataDir(), filename)
-    np.save(fileout, stark_map)
+    np.save(fileout, eig_vals_vecs)
 
 
 # In[ ]:
