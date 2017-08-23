@@ -5,6 +5,7 @@
 
 # In[7]:
 
+
 import os
 import numpy as np
 #import matplotlib.pyplot as plt
@@ -19,6 +20,7 @@ scl = c*10**-9 * En_h /(h * c);
 
 # In[8]:
 
+
 # User variables
   # Whether to import and save the Stark interaction matrix
 IMPORT_MAT_S, CALC_MAT_S, SAVE_MAT_S = False, True, True
@@ -30,6 +32,7 @@ SAVE_EIG_VECS = False
 
 
 # In[9]:
+
 
 # Helper functions
 def getDataDir():
@@ -72,6 +75,7 @@ def importIntMat(name, nmin, nmax, step_params):
 
 # In[ ]:
 
+
 # quantum numbers
 nmin = 69
 nmax = 74
@@ -111,6 +115,7 @@ elif CALC_MAT_D:
 
 # In[ ]:
 
+
 # specify the electric field
 field = np.linspace(1.0, 2.0, 11) # V /cm
 field_au = field * 100 / (En_h_He/(e*a_0_He)) 
@@ -127,7 +132,10 @@ else:
     H_D = 0
 
 # diagonalise for each field
-eig_vals_vecs = stark_map(H_0, mat_S, field_au, H_Z=H_Z, H_D=H_D, returnEigVecs=SAVE_EIG_VECS)
+if SAVE_EIG_VECS:
+    eig_vals_vecs = stark_map_vec(H_0, mat_S, field_au, H_Z=H_Z, H_D=H_D)
+else:
+    eig_vals_vecs = stark_map(H_0, mat_S, field_au, H_Z=H_Z, H_D=H_D)
 
 if SAVE_EIG_VALS or SAVE_EIG_VECS:
     # Save Stark map to file
@@ -137,6 +145,7 @@ if SAVE_EIG_VALS or SAVE_EIG_VECS:
 
 
 # In[ ]:
+
 
 
 
