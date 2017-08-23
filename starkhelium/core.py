@@ -170,18 +170,18 @@ def E_zeeman(m_vals, B_z):
     """
     return m_vals * B_z * (1/2)
 
-def chose_step(nmax, lmax, step_low, step_high, interp_type, interp_params, round_step=10):
+def chose_step(nmax, lmax, step_low, step_high, interp_type, interp_params):
     if interp_type == 'poly':
-        return chose_step_poly(nmax, lmax, step_low, step_high, round_step=round_step, *interp_params)
+        return chose_step_poly(nmax, lmax, step_low, step_high, *interp_params)
     elif interp_type == 'sigmoid':
-        return chose_step_sigmoid(nmax, lmax, step_low, step_high, round_step=round_step, *interp_params)
+        return chose_step_sigmoid(nmax, lmax, step_low, step_high, *interp_params)
     
 @jit
-def chose_step_poly(nmax, lmax, step_low, step_high, exponent, round_step=10):
+def chose_step_poly(nmax, lmax, step_low, step_high, exponent, round_step):
     return np.round( (lmax/nmax)**exponent * (step_high-step_low) + step_low, round_step)
 
 @jit
-def chose_step_sigmoid(nmax, lmax, step_low, step_high, width, mid, round_step=10):
+def chose_step_sigmoid(nmax, lmax, step_low, step_high, width, mid, round_step):
     return np.round( (( step_high-step_low )/( 1+np.exp( -width*( (lmax/nmax)-mid ) ) )) + step_low, round_step)
 
 @jit
