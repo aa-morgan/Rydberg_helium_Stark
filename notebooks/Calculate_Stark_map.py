@@ -3,7 +3,7 @@
 
 # # Calculate Stark map for triplet helium
 
-# In[7]:
+# In[1]:
 
 
 import os
@@ -18,20 +18,20 @@ En_h = alpha**2.0 * m_e * c**2.0;
 scl = c*10**-9 * En_h /(h * c);
 
 
-# In[8]:
+# In[2]:
 
 
 # User variables
   # Whether to import and save the Stark interaction matrix
-IMPORT_MAT_S, CALC_MAT_S, SAVE_MAT_S = False, True, True
+IMPORT_MAT_S, CALC_MAT_S, SAVE_MAT_S = False, True, False
   # Whether to import and save the Diamagnetic interaction matrix
-IMPORT_MAT_D, CALC_MAT_D, SAVE_MAT_D = False, True, True
+IMPORT_MAT_D, CALC_MAT_D, SAVE_MAT_D = False, True, False
   # Whether to save the eigenvalues and eigenvectors
 SAVE_EIG_VALS = True
 SAVE_EIG_VECS = False
 
 
-# In[9]:
+# In[3]:
 
 
 # Helper functions
@@ -73,12 +73,12 @@ def importIntMat(name, nmin, nmax, step_params):
         raise
 
 
-# In[ ]:
+# In[5]:
 
 
 # quantum numbers
-nmin = 69
-nmax = 74
+nmin = 10
+nmax = 12
 S = 1
 n_vals, L_vals, m_vals = get_nlm_vals(nmin, nmax)
 J_vals = get_J_vals(S, L_vals, 1)
@@ -95,7 +95,10 @@ H_0 = np.diag(En)
 step_low = 0.005
 step_high = 0.005
 interp_type = 'sigmoid'
-interp_params = [10.0,0.5]
+sigmoid_width = 10.0
+sigmoid_pos = 0.5
+round_step = 4
+interp_params = [sigmoid_width, sigmoid_pos, round_step]
 step_params = [step_low, step_high, interp_type, interp_params]
 
 if IMPORT_MAT_S: mat_S = importIntMat('Stark', nmin, nmax, step_params)
