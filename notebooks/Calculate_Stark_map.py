@@ -5,7 +5,6 @@
 
 # In[1]:
 
-
 import os
 import numpy as np
 #import matplotlib.pyplot as plt
@@ -18,21 +17,19 @@ En_h = alpha**2.0 * m_e * c**2.0;
 scl = c*10**-9 * En_h /(h * c);
 
 
-# In[2]:
-
+# In[5]:
 
 # User variables
   # Whether to import and save the Stark interaction matrix
-IMPORT_MAT_S, CALC_MAT_S, SAVE_MAT_S = False, True, False
+IMPORT_MAT_S, CALC_MAT_S, SAVE_MAT_S = False, True, True
   # Whether to import and save the Diamagnetic interaction matrix
-IMPORT_MAT_D, CALC_MAT_D, SAVE_MAT_D = False, True, False
+IMPORT_MAT_D, CALC_MAT_D, SAVE_MAT_D = False, True, True
   # Whether to save the eigenvalues and eigenvectors
 SAVE_EIG_VALS = True
 SAVE_EIG_VECS = False
 
 
-# In[3]:
-
+# In[6]:
 
 # Helper functions
 def getDataDir():
@@ -73,12 +70,11 @@ def importIntMat(name, nmin, nmax, step_params):
         raise
 
 
-# In[5]:
-
+# In[8]:
 
 # quantum numbers
-nmin = 10
-nmax = 12
+nmin = 69
+nmax = 74
 S = 1
 n_vals, L_vals, m_vals = get_nlm_vals(nmin, nmax)
 J_vals = get_J_vals(S, L_vals, 1)
@@ -118,7 +114,6 @@ elif CALC_MAT_D:
 
 # In[ ]:
 
-
 # specify the electric field
 field = np.linspace(1.0, 2.0, 11) # V /cm
 field_au = field * 100 / (En_h_He/(e*a_0_He)) 
@@ -148,7 +143,6 @@ if SAVE_EIG_VALS or SAVE_EIG_VECS:
 
 
 # In[ ]:
-
 
 
 

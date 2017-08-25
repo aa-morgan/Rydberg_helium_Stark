@@ -449,7 +449,7 @@ def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation,
 
 @jit
 def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, 
-                          dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0]], wf_overlap_dict={}):
+                          dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)    
@@ -469,7 +469,7 @@ def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation,
     return mat_I
 
 @jit
-def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.005,'poly',[1.0]], wf_overlap_dict={}):
+def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}):
     """ Diamagnetic interaction matrix.
     """
     num_cols = len(neff_vals)
@@ -491,7 +491,7 @@ def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.0
     return mat_D
 
 @jit
-def diamagnetic_matrix_select_m(n_vals, neff_vals, l_vals, m, step_params=[0.005,0.005,'poly',[1.0]], wf_overlap_dict={}):
+def diamagnetic_matrix_select_m(n_vals, neff_vals, l_vals, m, step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}):
     """ Diamagnetic interaction matrix.
     """
     num_cols = len(neff_vals)    
