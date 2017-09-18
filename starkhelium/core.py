@@ -47,6 +47,17 @@ mu_M = m_e / mass_He
 En_h_He = En_h * mu_me
 a_0_He = a_0 / mu_me
 
+def version_table():
+    import matplotlib
+    import scipy
+    import numba
+    import numpy as np
+    import pandas as pd
+    
+    versions = [np.__version__, scipy.__version__, matplotlib.__version__, pd.__version__, numba.__version__]
+    indicies = ['Numpy', 'Scipy', 'Matplotlib', 'Pandas', 'Numba']
+    return pd.DataFrame(versions, index=indicies, columns=['Version'])
+
 @jit
 def get_nl_vals(nmin, nmax, m):
     """ n and l vals for each matrix column, using range n_min to n_max.
@@ -448,13 +459,13 @@ def diamagnetic_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2,
         return 0.0
     
 @jit
-def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation, 
-                 dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}, useDict=True, useAutoStep=False):
+def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation, dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0,4]], 
+                 wf_overlap_dict={}, useDict=True, useAutoStep=False, disableTQDM=False):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
     mat_S = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="Calculating Stark terms"):
+    for i in trange(num_cols, desc="Calculating Stark terms", disable=disableTQDM):
         n_val_1 = n_vals[i]
         n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
@@ -472,13 +483,13 @@ def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation,
     return mat_S
 
 @jit
-def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, 
-                          dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}, useDict=True, useAutoStep=False):
+def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0,4]], 
+                          wf_overlap_dict={}, useDict=True, useAutoStep=False, disableTQDM=False):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)    
     mat_I = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="calculate Stark terms"):
+    for i in trange(num_cols, desc="calculate Stark terms", disable=disableTQDM):
         n_val_1 = n_vals[i]
         n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
@@ -494,13 +505,12 @@ def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation,
     return mat_I
 
 @jit
-def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, 
-                       step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}, useDict=True, useAutoStep=False):
+def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={},useDict=True, useAutoStep=False, disableTQDM=False):
     """ Diamagnetic interaction matrix.
     """
     num_cols = len(neff_vals)
     mat_D = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="Calculating diamagnetic terms"):
+    for i in trange(num_cols, desc="Calculating diamagnetic terms", disable=disableTQDM):
         n_val_1 = n_vals[i]
         n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
@@ -517,13 +527,13 @@ def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals,
     return mat_D
 
 @jit
-def diamagnetic_matrix_select_m(n_vals, neff_vals, l_vals, m, 
-                                step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}, useDict=True, useAutoStep=False):
+def diamagnetic_matrix_select_m(n_vals, neff_vals, l_vals, m, step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}, 
+                                useDict=True, useAutoStep=False, disableTQDM=False):
     """ Diamagnetic interaction matrix.
     """
     num_cols = len(neff_vals)    
     mat_D = np.zeros([num_cols, num_cols])
-    for i in trange(num_cols, desc="calculate Diamagnetic terms"):
+    for i in trange(num_cols, desc="calculate Diamagnetic terms", disable=disableTQDM):
         n_val_1 = n_vals[i]
         n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
