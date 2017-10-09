@@ -30,14 +30,26 @@ from math import ceil, log, exp
 import numpy as np
 from numba import jit
 from tqdm import trange
-from scipy.constants import h, hbar, c, alpha, m_e, e, epsilon_0, atomic_mass, pi
 from .drake1999 import quantum_defects
 import errno
 import os
 from datetime import datetime
+#from scipy.constants import h, hbar, c, alpha, m_e, e, epsilon_0, atomic_mass, pi, Rydberg, physical_constants
+#a_0 = physical_constants['Bohr radius'][0]
 
 # constants
 Ry_inf = 10973731.568508
+h = 6.62607004e-34
+hbar = 1.0545718001391127e-34
+c = 299792458.0
+alpha = 0.0072973525664
+m_e = 9.10938356e-31
+e = 1.6021766208e-19
+epsilon_0 = 8.854187817620389e-12
+atomic_mass = 1.66053904e-27
+pi = 3.141592653589793
+
+# derived constants
 En_h = 2*Ry_inf*h*c # alpha**2.0 * m_e * c**2.0
 a_0 = hbar/ (m_e * c * alpha)
 mass_He = 4.002602 * atomic_mass
