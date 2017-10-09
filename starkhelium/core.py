@@ -181,18 +181,25 @@ def E_zeeman(m_vals, B_z):
     """
     return m_vals * B_z * (1/2)
 
-def chose_step(nmax, lmax, step_low, step_high, interp_type, interp_params):
-    if interp_type == 'poly':
-        return chose_step_poly(nmax, lmax, step_low, step_high, *interp_params)
+def chose_step(nmax, lmax, step_params):
+    interp_type = step_params[0]
+    if interp_type == 'flat':
+        return step_params[1]
+    elif interp_type == 'poly':
+        return chose_step_poly(nmax, lmax, step_params)
     elif interp_type == 'sigmoid':
-        return chose_step_sigmoid(nmax, lmax, step_low, step_high, *interp_params)
+        return chose_step_sigmoid(nmax, lmax, step_params)
     
 @jit
-def chose_step_poly(nmax, lmax, step_low, step_high, exponent, round_step):
+def chose_step_poly(nmax, lmax, step_params):
+    interp_type, step_low, step_high, interp_params = [*step_params]
+    exponent, round_step = [*interp_params]
     return np.round( (lmax/nmax)**exponent * (step_high-step_low) + step_low, round_step)
 
 @jit
-def chose_step_sigmoid(nmax, lmax, step_low, step_high, width, mid, round_step):
+def chose_step_sigmoid(nmax, lmax, step_params):
+    interp_type, step_low, step_high, interp_params = [*step_params]
+    width, mid, round_step = [*interp_params]
     return np.round( (( step_high-step_low )/( 1+np.exp( -width*( (lmax/nmax)-mid ) ) )) + step_low, round_step)
 
 @jit
@@ -320,59 +327,16 @@ def wf_overlap(r1, y1, r2, y2, p=1.0):
     r1, y1, r2, y2 = wf_align(r1, y1, r2, y2)
     return np.sum(y1 * y2 * r1**(2.0 + p))
 
-def rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, useDict=True, wf_overlap_dict={}, p=1.0):
+def rad_overlap(n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, p=1.0):
     """ Radial overlap for state n1, l1 and n2 l2.
     """
     nmax = max(n_eff_1, n_eff_2)
     lmax = max(l_1, l_2)
-    numerov_step = chose_step(nmax, lmax, *step_params)
-    #if useDict:
-    #     # Re-order pair of (n,l) to store in dict, as not to have duplicates
-    #    if (int(n_val_1) == int(n_val_2)):
-    #        n_first, n_last = int(n_val_1), int(n_val_2)
-    #        if (int(l_1) > int(l_2)):
-    #            l_first, l_last = int(l_1), int(l_2)
-    #        else:
-    #            l_first, l_last = int(l_2), int(l_1)
-    #    elif (int(n_val_1) > int(n_val_2)):
-    #        n_first, n_last, l_first, l_last = int(n_val_1), int(n_val_2), int(l_1), int(l_2)
-    #    elif (int(n_val_1) < int(n_val_2)):
-    #        n_first, n_last, l_first, l_last = int(n_val_2), int(n_val_1), int(l_2), int(l_1)
-
-    #    overlap_key = (int(n_first), int(l_first), int(n_last), int(l_last), int(p))
-    #    overlap_val = wf_overlap_dict.get(overlap_key, None)
-
-    #   if overlap_val == None:
-    #        r1, y1 = wf_numerov(n_eff_1, l_1, nmax, rmin, numerov_step)
-    #        r2, y2 = wf_numerov(n_eff_2, l_2, nmax, rmin, numerov_step)
-    #        wf_overlap_dict[overlap_key] = wf_overlap(r1, y1, r2, y2, p)
-    #        return wf_overlap_dict[overlap_key]
-    #    else:
-    #        return overlap_val
-    #else:
+    numerov_step = chose_step(nmax, lmax, step_params)
+    
     r1, y1 = wf_numerov(n_eff_1, l_1, nmax, rmin, numerov_step)
     r2, y2 = wf_numerov(n_eff_2, l_2, nmax, rmin, numerov_step)
     return wf_overlap(r1, y1, r2, y2, p)
-    
-def rad_overlap_autostep(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, 
-                         useDict=True, wf_overlap_dict={}, p=1.0, 
-                         useAutoStep=True, threshold=10**-10, autoFactor=2.0, loop_max=10):
-    # [step_low, step_high, interp_type, interp_params]
-    step_params_auto = step_params
-    loop_count = 0
-    while True:
-        loop_count += 1
-        overlap = rad_overlap(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, step_params_auto, 
-                useDict=useDict, wf_overlap_dict=wf_overlap_dict, p=p)
-        if not( abs(overlap)<=threshold ) or not(useAutoStep):
-            break
-        elif loop_count >= loop_max:
-            print('Error: loop_max reached in rad_overlap_autostep()')
-            break
-        else:
-            step_params_auto[0] *= autoFactor
-            step_params_auto[1] *= autoFactor
-    return overlap
 
 @jit
 def ang_overlap_stark(l_1, l_2, m_1, m_2, field_orientation, dm_allow):
@@ -429,8 +393,7 @@ def ang_overlap_diamagnetic(l_1, l_2, m_1, m_2):
     return 0.0
 
 @jit
-def stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, 
-              field_orientation, dm_allow, step_params, wf_overlap_dict={}, useDict=True, rmin=0.65, useAutoStep=False):
+def stark_int(n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, field_orientation, dm_allow, step_params=['flat',0.005], rmin=0.65):
     """ Stark interaction between states |n1, l1, m> and |n2, l2, m>.
     """
     dl = l_2 - l_1
@@ -438,14 +401,12 @@ def stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2,
     if (abs(dl) == 1) and (abs(dm) <= 1):
         # Stark interaction
         return ang_overlap_stark(l_1, l_2, m_1, m_2, field_orientation, dm_allow) * \
-               rad_overlap_autostep(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, 
-                                    step_params, wf_overlap_dict=wf_overlap_dict, useDict=useDict, p=1.0, useAutoStep=useAutoStep)
+               rad_overlap(n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, p=1.0)
     else:
         return 0.0
     
 @jit
-def diamagnetic_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, 
-                    step_params, wf_overlap_dict={}, useDict=True, rmin=0.65, useAutoStep=False):
+def diamagnetic_int(n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, step_params=['flat',0.005], rmin=0.65):
     """ Diamagnetic interaction between states |n1, l1, m> and |n2, l2, m>.
     """
     dl = l_2 - l_1
@@ -453,96 +414,78 @@ def diamagnetic_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2,
     if (abs(dl) in [0,2]) and (abs(dm) == 0):
         # Diamagnetic interaction
         return ang_overlap_diamagnetic(l_1, l_2, m_1, m_2) * \
-               rad_overlap_autostep(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, rmin, 
-                                    step_params, wf_overlap_dict=wf_overlap_dict, useDict=useDict, p=2.0, useAutoStep=useAutoStep)
+               rad_overlap(n_eff_1, n_eff_2, l_1, l_2, rmin, step_params, p=2.0)
     else:
         return 0.0
     
 @jit
-def stark_matrix(n_vals, neff_vals, l_vals, m_vals, field_orientation, dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0,4]], 
-                 wf_overlap_dict={}, useDict=True, useAutoStep=False, disableTQDM=False):
+def stark_matrix(neff_vals, l_vals, m_vals, field_orientation, dm_allow=[0], step_params=['flat',0.005], disableTQDM=False):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)
     mat_S = np.zeros([num_cols, num_cols])
     for i in trange(num_cols, desc="Calculating Stark terms", disable=disableTQDM):
-        n_val_1 = n_vals[i]
         n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
         m_1 = m_vals[i]
         for j in range(i + 1, num_cols):
-            n_val_2 = n_vals[j]
             n_eff_2 = neff_vals[j]
             l_2 = l_vals[j]
             m_2 = m_vals[j]
-            mat_S[i][j] = stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, 
-                                    field_orientation, dm_allow, step_params, 
-                                    wf_overlap_dict=wf_overlap_dict, useDict=useDict, useAutoStep=useAutoStep)
+            mat_S[i][j] = stark_int(n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, field_orientation, dm_allow, step_params)
             # assume matrix is symmetric
             mat_S[j][i] = mat_S[i][j]
     return mat_S
 
 @jit
-def stark_matrix_select_m(n_vals, neff_vals, l_vals, m, field_orientation, dm_allow=[0], step_params=[0.005,0.005,'poly',[1.0,4]], 
-                          wf_overlap_dict={}, useDict=True, useAutoStep=False, disableTQDM=False):
+def stark_matrix_select_m(neff_vals, l_vals, m, field_orientation, dm_allow=[0], step_params=['flat',0.005], disableTQDM=False):
     """ Stark interaction matrix.
     """
     num_cols = len(neff_vals)    
     mat_I = np.zeros([num_cols, num_cols])
     for i in trange(num_cols, desc="calculate Stark terms", disable=disableTQDM):
-        n_val_1 = n_vals[i]
         n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
         for j in range(i + 1, num_cols):
-            n_val_2 = n_vals[j]
             n_eff_2 = neff_vals[j]
             l_2 = l_vals[j]
-            mat_I[i][j] = stark_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m, m, 
-                                    field_orientation, dm_allow, step_params, 
-                                    wf_overlap_dict=wf_overlap_dict, useDict=useDict, useAutoStep=useAutoStep)
+            mat_I[i][j] = stark_int(n_eff_1, n_eff_2, l_1, l_2, m, m, field_orientation, dm_allow, step_params)
             # assume matrix is symmetric
             mat_I[j][i] = mat_I[i][j]
     return mat_I
 
 @jit
-def diamagnetic_matrix(n_vals, neff_vals, l_vals, m_vals, step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={},useDict=True, useAutoStep=False, disableTQDM=False):
+def diamagnetic_matrix(neff_vals, l_vals, m_vals, step_params=['flat',0.005], disableTQDM=False):
     """ Diamagnetic interaction matrix.
     """
     num_cols = len(neff_vals)
     mat_D = np.zeros([num_cols, num_cols])
     for i in trange(num_cols, desc="Calculating diamagnetic terms", disable=disableTQDM):
-        n_val_1 = n_vals[i]
         n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
         m_1 = m_vals[i]
         for j in range(i, num_cols):
-            n_val_2 = n_vals[j]
             n_eff_2 = neff_vals[j]
             l_2 = l_vals[j]
             m_2 = m_vals[j]
-            mat_D[i][j] = diamagnetic_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, 
-                                          step_params, wf_overlap_dict=wf_overlap_dict, useDict=useDict, useAutoStep=useAutoStep)
+            mat_D[i][j] = diamagnetic_int(n_eff_1, n_eff_2, l_1, l_2, m_1, m_2, step_params)
             # assume matrix is symmetric
             mat_D[j][i] = mat_D[i][j]
     return mat_D
 
 @jit
-def diamagnetic_matrix_select_m(n_vals, neff_vals, l_vals, m, step_params=[0.005,0.005,'poly',[1.0,4]], wf_overlap_dict={}, 
-                                useDict=True, useAutoStep=False, disableTQDM=False):
+def diamagnetic_matrix_select_m(neff_vals, l_vals, m, step_params=['flat',0.005], disableTQDM=False):
     """ Diamagnetic interaction matrix.
     """
     num_cols = len(neff_vals)    
     mat_D = np.zeros([num_cols, num_cols])
     for i in trange(num_cols, desc="calculate Diamagnetic terms", disable=disableTQDM):
-        n_val_1 = n_vals[i]
         n_eff_1 = neff_vals[i]
         l_1 = l_vals[i]
         for j in range(i, num_cols):
-            n_val_2 = n_vals[j]
             n_eff_2 = neff_vals[j]
             l_2 = l_vals[j]
-            mat_D[i][j] = diamagnetic_int(n_val_1, n_val_2, n_eff_1, n_eff_2, l_1, l_2, m, m, 
-                                          step_params, wf_overlap_dict=wf_overlap_dict, useDict=useDict, useAutoStep=useAutoStep)
+            mat_D[i][j] = diamagnetic_int(n_eff_1, n_eff_2, l_1, l_2, m, m, step_params)
             # assume matrix is symmetric
             mat_D[j][i] = mat_D[i][j]
     return mat_D
