@@ -1,3 +1,5 @@
+`Deprecated:` In favour of www.github.com/aa-morgan/helium-stark-zeeman
+
 # Rydberg_helium_Stark
 Tools for calculating the Stark effect in Rydberg helium using the Numerov method.
 
